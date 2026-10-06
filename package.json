@@ -1,5 +1,5 @@
 {
-  "name": "health-api",
+  "name": "deskmini",
   "version": "1.0.0",
   "description": "Simple health check API server built with Fastify and TypeScript",
   "type": "module",

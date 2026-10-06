@@ -1,10 +1,10 @@
 services:
-  health-api:
+  deskmini:
     build:
       context: .
       dockerfile: Dockerfile
-    image: health-api:latest
-    container_name: health-api
+    image: deskmini:latest
+    container_name: deskmini
     restart: unless-stopped
     ports:
       - "3000:3000"
