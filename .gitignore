@@ -1,0 +1,23 @@
+# Dependencies — restored with `npm ci`, platform-specific binaries must not be committed
+node_modules/
+
+# Build output — regenerated with `npm run build`
+dist/
+
+# Test / coverage artifacts
+coverage/
+*.lcov
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
