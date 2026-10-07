@@ -7,7 +7,7 @@
 - 작업 폴더는 `~/deskmini`(GitHub `sinwyoon-ctrl/deskmini`)다. 새 프로젝트는 `~/` 아래에 폴더를 만들어 시작한다.
 - 이 계정(ionenet)은 sudo 비밀번호가 필요하다. 비밀번호는 모르고 입력할 수도 없으므로 sudo 가 필요한 일은 하지 말고 사용자에게 명령을 넘긴다.
 - 같은 서버의 KVM 안에 Windows 11 VM(win11)이 있다. VM 을 켜고 끄거나 설정을 바꾸지 않는다.
-- Docker 컨테이너 portainer, health-api 는 상시 구동 중이다. 이 둘을 중지·삭제하지 않는다.
+- Docker 컨테이너 portainer, deskmini 는 상시 구동 중이다. 이 둘을 중지·삭제하지 않는다.
 
 ## 가드레일
 
