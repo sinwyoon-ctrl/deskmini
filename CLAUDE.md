@@ -18,5 +18,4 @@
 - 작업이 끝나면 `~/bin/notify` 로 한 줄 요약을 보낸다. 막혔을 때도 보낸다.
 
 ## 반복 실패 (한 줄씩)
-- Orca 로 띄운 Claude 가 명령마다 승인을 물었다 → ~/.claude/settings.json defaultMode 를 auto 로 둔다(2026-10-21).
 
