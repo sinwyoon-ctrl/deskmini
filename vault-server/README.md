@@ -26,3 +26,9 @@
 
 ## 원본을 고쳤으면
 원본을 고친 뒤 이 폴더로 다시 복사해 커밋한다(`cp` 표 참고). 반대 방향으로 쓰지 않는다.
+
+## 백업 (restic → 메인 PC D:\vault-backup, 10/29 확정)
+- 설정 `~/.config/vault-backup/{env,password,known_hosts}` (git 밖, 600). env 에 MAIN_SSH_HOST·RESTIC_REPOSITORY(sftp)·RESTIC_SFTP_COMMAND(전용 known_hosts 사용). 암호는 대표 비밀번호 관리자에 사본.
+- `~/bin/vault-backup` 를 cron 이 09~18시 매시 호출, 하루 1회 성공. 메인 꺼져 있으면 건너뜀. 2일 미성공 시 notify.
+- 복원: `restic -o "sftp.command=$RESTIC_SFTP_COMMAND" restore latest --target <폴더>` 뒤 `<폴더>/home/ionenet/vault.git` 을 정본 자리로.
+- 메인 호스트 키 지문(ED25519) SHA256:4OxkBL2VakWuRqS3G7bF0CdajTLVzzBSbKwHW/qDBnk — 바뀌면 메인 세션에 확인.

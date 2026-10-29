@@ -9,17 +9,19 @@ log(){ echo "$(date '+%F %T') $*" >> "$LOG"; }
 [ -f "$ENVF" ] || { echo "vault-backup: 미설정($ENVF 없음)"; exit 0; }
 set -a; . "$ENVF"; set +a
 : "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD_FILE:?}" "${MAIN_SSH_HOST:?}"
+SSH_OPTS=${VAULT_SSH_OPTS:-"-o BatchMode=yes -o ConnectTimeout=5"}
+R=(restic); [ -n "${RESTIC_SFTP_COMMAND:-}" ] && R=(restic -o "sftp.command=$RESTIC_SFTP_COMMAND")
 export PATH="$HOME/.local/bin:$PATH"
 command -v restic >/dev/null || { log "restic 미설치"; echo "vault-backup: restic 미설치"; exit 1; }
 [ "${1:-}" = "--force" ] || { [ "$(cat "$STATE/last-success" 2>/dev/null)" = "$today" ] && exit 0; }
 # 메인 켜져 있나(5초 안에 SSH 응답)
-if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$MAIN_SSH_HOST" exit 2>/dev/null; then
+if ! ssh $SSH_OPTS "$MAIN_SSH_HOST" exit 2>/dev/null; then
   log "메인 미응답, 건너뜀"; exit 0
 fi
-restic snapshots >/dev/null 2>&1 || { restic init >>"$LOG" 2>&1 || { log "init 실패"; exit 1; }; }
+"${R[@]}" snapshots >/dev/null 2>&1 || { "${R[@]}" init >>"$LOG" 2>&1 || { log "init 실패"; exit 1; }; }
 paths=("$HOME/vault.git" "$HOME/vault-agent")
 [ -f "$HOME/vault/.claude/settings.local.json" ] && paths+=("$HOME/vault/.claude/settings.local.json")
-if restic backup --quiet "${paths[@]}" >>"$LOG" 2>&1 && restic forget --quiet --keep-daily 30 --prune >>"$LOG" 2>&1; then
+if "${R[@]}" backup --quiet "${paths[@]}" >>"$LOG" 2>&1 && "${R[@]}" forget --quiet --keep-daily 30 --prune >>"$LOG" 2>&1; then
   echo "$today" > "$STATE/last-success"; log "성공"
 else
   log "백업 실패"
