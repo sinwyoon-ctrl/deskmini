@@ -9,6 +9,8 @@
 | `~/bin/vault-note`, `~/bin/vault-backup` | `bin/` |
 | `~/vault/.claude/settings.local.json` (graphify 훅, 로컬 전용) | `claude-local/` |
 | `~/work/vault-spec/SPEC-20261029.md` | `SPEC-20261029.md` |
+| `~/vault/sync_graph.sh` (그래프 수동 갱신: extract→cluster-only→label) | `sync_graph.sh` |
+| `~/.local/share/vault-graph/bin/claude` (graphify 용 MCP 없는 claude 래퍼) | `bin/claude-mcpless-wrapper` |
 
 ## 복원 순서 (디스크 교체 시)
 1. `git init --bare -b main ~/vault.git` 뒤 다른 사본(메인 클론·restic)에서 `git push --mirror` 로 내용 복원.
@@ -19,7 +21,8 @@
 5. `cp claude-local/settings.local.json ~/vault/.claude/`
 6. MCP: `claude mcp add -s user obsidian-vault -- npx -y @modelcontextprotocol/server-filesystem /home/ionenet/vault`
    `~/.claude/settings.json` permissions.deny 에 `mcp__obsidian-vault__{write_file,edit_file,create_directory,move_file}`.
-7. 시험: `bash ~/vault.git/hooks/test-secret-scan.sh` 가 ALL PASS.
+7. 그래프(선택): `mkdir -p ~/.local/share/vault-graph/bin && cp bin/claude-mcpless-wrapper ~/.local/share/vault-graph/bin/claude && chmod +x` 뒤 `uv tool install "graphifyy[mcp]"`, `~/vault/sync_graph.sh`. 12문서 기준 40초.
+8. 시험: `bash ~/vault.git/hooks/test-secret-scan.sh` 가 ALL PASS.
 
 ## 원본을 고쳤으면
 원본을 고친 뒤 이 폴더로 다시 복사해 커밋한다(`cp` 표 참고). 반대 방향으로 쓰지 않는다.

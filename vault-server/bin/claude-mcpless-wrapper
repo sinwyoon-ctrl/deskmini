@@ -1,0 +1,3 @@
+#!/bin/bash
+# graphify 의 claude-cli 백엔드용 래퍼. 사용자 MCP 서버를 로드하지 않아 호출당 2초 절약하고 서버 프로세스를 안 띄운다.
+exec /usr/bin/claude --strict-mcp-config --mcp-config '{"mcpServers":{}}' "$@"
