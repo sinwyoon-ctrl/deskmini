@@ -1,11 +1,32 @@
 #!/bin/bash
-# restic 백업(준비만). 설정: ~/.config/vault-backup/env 에 RESTIC_REPOSITORY, RESTIC_PASSWORD_FILE
+# 볼트 백업: DeskMini → 메인 PC D 드라이브(restic, SFTP). 메인이 켜져 있는 낮에만 가능하므로
+# cron 이 09~18시 매시 부르고, 하루 한 번 성공하면 그날은 더 하지 않는다.
+# 설정: ~/.config/vault-backup/env (RESTIC_REPOSITORY=sftp:<호스트>:/D:/vault-backup, RESTIC_PASSWORD_FILE, MAIN_SSH_HOST)
 set -u
-ENVF="$HOME/.config/vault-backup/env"
-if [ ! -f "$ENVF" ]; then echo "vault-backup: 미설정($ENVF 없음). 백업 장소 확정 후 만든다."; exit 0; fi
+ENVF="$HOME/.config/vault-backup/env"; STATE="$HOME/.local/state/vault-backup"; mkdir -p "$STATE"
+LOG="$STATE/log"; today=$(date +%F)
+log(){ echo "$(date '+%F %T') $*" >> "$LOG"; }
+[ -f "$ENVF" ] || { echo "vault-backup: 미설정($ENVF 없음)"; exit 0; }
 set -a; . "$ENVF"; set +a
-if [ -z "${RESTIC_REPOSITORY:-}" ] || [ -z "${RESTIC_PASSWORD_FILE:-}" ]; then echo "vault-backup: 미설정(RESTIC_REPOSITORY/RESTIC_PASSWORD_FILE 비어 있음)"; exit 0; fi
-if ! which restic >/dev/null 2>&1; then echo "vault-backup: restic 미설치. 설치 명령(사용자가 실행): sudo apt install restic"; exit 1; fi
+: "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD_FILE:?}" "${MAIN_SSH_HOST:?}"
+export PATH="$HOME/.local/bin:$PATH"
+command -v restic >/dev/null || { log "restic 미설치"; echo "vault-backup: restic 미설치"; exit 1; }
+[ "${1:-}" = "--force" ] || { [ "$(cat "$STATE/last-success" 2>/dev/null)" = "$today" ] && exit 0; }
+# 메인 켜져 있나(5초 안에 SSH 응답)
+if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$MAIN_SSH_HOST" exit 2>/dev/null; then
+  log "메인 미응답, 건너뜀"; exit 0
+fi
+restic snapshots >/dev/null 2>&1 || { restic init >>"$LOG" 2>&1 || { log "init 실패"; exit 1; }; }
 paths=("$HOME/vault.git" "$HOME/vault-agent")
 [ -f "$HOME/vault/.claude/settings.local.json" ] && paths+=("$HOME/vault/.claude/settings.local.json")
-restic backup "${paths[@]}" && restic forget --keep-daily 30 --prune
+if restic backup --quiet "${paths[@]}" >>"$LOG" 2>&1 && restic forget --quiet --keep-daily 30 --prune >>"$LOG" 2>&1; then
+  echo "$today" > "$STATE/last-success"; log "성공"
+else
+  log "백업 실패"
+  # 이틀 연속 성공 없으면 알림
+  last=$(cat "$STATE/last-success" 2>/dev/null || echo 1970-01-01)
+  if [ $(( ( $(date -d "$today" +%s) - $(date -d "$last" +%s) ) / 86400 )) -ge 2 ]; then
+    "$HOME/bin/notify" "볼트 백업: 2일 이상 성공 없음(메인 D 드라이브). 로그 ~/.local/state/vault-backup/log" 2>/dev/null
+  fi
+  exit 1
+fi
