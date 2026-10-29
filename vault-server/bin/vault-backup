@@ -1,0 +1,11 @@
+#!/bin/bash
+# restic 백업(준비만). 설정: ~/.config/vault-backup/env 에 RESTIC_REPOSITORY, RESTIC_PASSWORD_FILE
+set -u
+ENVF="$HOME/.config/vault-backup/env"
+if [ ! -f "$ENVF" ]; then echo "vault-backup: 미설정($ENVF 없음). 백업 장소 확정 후 만든다."; exit 0; fi
+set -a; . "$ENVF"; set +a
+if [ -z "${RESTIC_REPOSITORY:-}" ] || [ -z "${RESTIC_PASSWORD_FILE:-}" ]; then echo "vault-backup: 미설정(RESTIC_REPOSITORY/RESTIC_PASSWORD_FILE 비어 있음)"; exit 0; fi
+if ! which restic >/dev/null 2>&1; then echo "vault-backup: restic 미설치. 설치 명령(사용자가 실행): sudo apt install restic"; exit 1; fi
+paths=("$HOME/vault.git" "$HOME/vault-agent")
+[ -f "$HOME/vault/.claude/settings.local.json" ] && paths+=("$HOME/vault/.claude/settings.local.json")
+restic backup "${paths[@]}" && restic forget --keep-daily 30 --prune

@@ -1,0 +1,50 @@
+#!/bin/bash
+# 들어오는 모든 커밋을 하나씩 비밀 검사기로 넘긴다. 하나라도 걸리거나 git 오류가 나면 push 전체 거절.
+set -o pipefail
+HOOKS="$(cd "$(dirname "$0")" && pwd)"
+zero=0000000000000000000000000000000000000000
+status=0
+tmp=$(mktemp -d) || exit 1
+trap 'rm -f "$tmp"/allow "$tmp"/seen; rmdir "$tmp" 2>/dev/null' EXIT
+: > "$tmp/seen"
+fail() { echo "거절: 검사 중 오류가 발생했습니다 ($1)."; exit 1; }
+
+while read -r old new ref; do
+  [ "$new" = "$zero" ] && continue
+  if [ "$old" = "$zero" ]; then
+    commits=$(git rev-list --reverse "$new" --not --all) || fail "rev-list"
+  else
+    commits=$(git rev-list --reverse "$old..$new") || fail "rev-list"
+  fi
+  for c in $commits; do
+    short=$(git rev-parse --short "$c") || fail "rev-parse"
+    # 새 (blob,경로) 쌍이 있는지 확인. 이미 검사한 쌍은 건너뛴다.
+    raw=$(mktemp "$tmp/rawXXXX") || fail "mktemp"
+    git -c core.quotepath=false diff-tree -r -z --root --no-commit-id "$c" > "$raw" || fail "diff-tree"
+    fresh=0
+    while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+      nb=$(printf '%s' "$meta" | awk '{print $4}')
+      case "$nb" in *[!0]*) ;; *) continue ;; esac   # 삭제(전부 0)는 검사 불필요
+      key="$nb $path"
+      if ! grep -qxF -- "$key" "$tmp/seen"; then
+        printf '%s\n' "$key" >> "$tmp/seen"; fresh=1
+      fi
+    done < "$raw"
+    rm -f "$raw"
+    [ "$fresh" = 1 ] || continue
+    if git cat-file -e "$c:.vault-scan-allow" 2>/dev/null; then
+      git show "$c:.vault-scan-allow" > "$tmp/allow" || fail "show allow"
+    else
+      : > "$tmp/allow"
+    fi
+    if ! git -c core.quotepath=false diff-tree -r -p --root --no-commit-id "$c" \
+        | python3 -I "$HOOKS/secret-scan.py" --commit "$short" --allow-file "$tmp/allow" --lines-only; then
+      status=1
+    fi
+  done
+done
+if [ "$status" != 0 ]; then
+  echo "거절: 비밀·개인정보 또는 검토되지 않은 파일이 있습니다. 값은 표시하지 않습니다."
+  echo "해당 내용을 지우고 'git reset --soft origin/main' 후 다시 커밋·push 하세요. 허용할 경로는 .vault-scan-allow 에 한 줄씩 적습니다."
+fi
+exit $status
