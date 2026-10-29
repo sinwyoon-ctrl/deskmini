@@ -1,34 +1,29 @@
 #!/bin/bash
-# 볼트 백업: DeskMini → 메인 PC D 드라이브(restic, SFTP). 메인이 켜져 있는 낮에만 가능하므로
-# cron 이 09~18시 매시 부르고, 하루 한 번 성공하면 그날은 더 하지 않는다.
-# 설정: ~/.config/vault-backup/env (RESTIC_REPOSITORY=sftp:<호스트>:/D:/vault-backup, RESTIC_PASSWORD_FILE, MAIN_SSH_HOST)
+# 볼트 백업: DeskMini → 메인 PC D:\vault-backup\bundles (git bundle, 암호 없음, 날짜별 30개 보존)
+# 메인이 켜져 있는 낮에만 가능하므로 cron 이 09~18시 매시 부르고, 하루 한 번 성공하면 그날은 더 하지 않는다.
 set -u
-ENVF="$HOME/.config/vault-backup/env"; STATE="$HOME/.local/state/vault-backup"; mkdir -p "$STATE"
+CFG="$HOME/.config/vault-backup/host"; STATE="$HOME/.local/state/vault-backup"; mkdir -p "$STATE"
 LOG="$STATE/log"; today=$(date +%F)
 log(){ echo "$(date '+%F %T') $*" >> "$LOG"; }
-[ -f "$ENVF" ] || { echo "vault-backup: 미설정($ENVF 없음)"; exit 0; }
-set -a; . "$ENVF"; set +a
-: "${RESTIC_REPOSITORY:?}" "${RESTIC_PASSWORD_FILE:?}" "${MAIN_SSH_HOST:?}"
-SSH_OPTS=${VAULT_SSH_OPTS:-"-o BatchMode=yes -o ConnectTimeout=5"}
-R=(restic); [ -n "${RESTIC_SFTP_COMMAND:-}" ] && R=(restic -o "sftp.command=$RESTIC_SFTP_COMMAND")
-export PATH="$HOME/.local/bin:$PATH"
-command -v restic >/dev/null || { log "restic 미설치"; echo "vault-backup: restic 미설치"; exit 1; }
+[ -f "$CFG" ] || { echo "vault-backup: 미설정($CFG 없음)"; exit 0; }
+MAIN="$(head -1 "$CFG")"                      # 예: sinwy@100.125.31.94
+KH="$HOME/.config/vault-backup/known_hosts"   # 메인 호스트 키 고정
+SSH_OPTS=(-o "UserKnownHostsFile=$KH" -o BatchMode=yes -o ConnectTimeout=8)
+DEST='D:/vault-backup/bundles'
 [ "${1:-}" = "--force" ] || { [ "$(cat "$STATE/last-success" 2>/dev/null)" = "$today" ] && exit 0; }
-# 메인 켜져 있나(5초 안에 SSH 응답)
-if ! ssh $SSH_OPTS "$MAIN_SSH_HOST" exit 2>/dev/null; then
-  log "메인 미응답, 건너뜀"; exit 0
+ssh "${SSH_OPTS[@]}" "$MAIN" exit 2>/dev/null || { log "메인 미응답, 건너뜀"; exit 0; }
+tmp=$(mktemp -d); f="$tmp/vault-$today.bundle"
+if ! git -C "$HOME/vault.git" bundle create "$f" --all >/dev/null 2>&1 || ! git -C "$HOME/vault.git" bundle verify "$f" >/dev/null 2>&1; then
+  log "bundle 생성 실패"; exit 1
 fi
-"${R[@]}" snapshots >/dev/null 2>&1 || { "${R[@]}" init >>"$LOG" 2>&1 || { log "init 실패"; exit 1; }; }
-paths=("$HOME/vault.git" "$HOME/vault-agent")
-[ -f "$HOME/vault/.claude/settings.local.json" ] && paths+=("$HOME/vault/.claude/settings.local.json")
-if "${R[@]}" backup --quiet "${paths[@]}" >>"$LOG" 2>&1 && "${R[@]}" forget --quiet --keep-daily 30 --prune >>"$LOG" 2>&1; then
-  echo "$today" > "$STATE/last-success"; log "성공"
-else
-  log "백업 실패"
-  # 이틀 연속 성공 없으면 알림
-  last=$(cat "$STATE/last-success" 2>/dev/null || echo 1970-01-01)
-  if [ $(( ( $(date -d "$today" +%s) - $(date -d "$last" +%s) ) / 86400 )) -ge 2 ]; then
-    "$HOME/bin/notify" "볼트 백업: 2일 이상 성공 없음(메인 D 드라이브). 로그 ~/.local/state/vault-backup/log" 2>/dev/null
-  fi
-  exit 1
+ssh "${SSH_OPTS[@]}" "$MAIN" "cmd /c if not exist \"D:\\vault-backup\\bundles\" mkdir \"D:\\vault-backup\\bundles\"" >/dev/null 2>&1
+if scp -q "${SSH_OPTS[@]}" "$f" "$MAIN:$DEST/vault-$today.bundle" 2>/dev/null; then
+  # 30개 넘는 오래된 묶음 정리(우리 폴더 안에서만)
+  ssh "${SSH_OPTS[@]}" "$MAIN" "powershell -NoProfile -Command \"Get-ChildItem 'D:\\vault-backup\\bundles\\vault-*.bundle' | Sort-Object Name -Descending | Select-Object -Skip 30 | Remove-Item\"" >/dev/null 2>&1
+  echo "$today" > "$STATE/last-success"; log "성공 vault-$today.bundle ($(du -k "$f" | cut -f1)KB)"
+  rm -f "$f"; rmdir "$tmp" 2>/dev/null; exit 0
 fi
+log "전송 실패"; rm -f "$f"; rmdir "$tmp" 2>/dev/null
+last=$(cat "$STATE/last-success" 2>/dev/null || echo 1970-01-01)
+[ $(( ( $(date -d "$today" +%s) - $(date -d "$last" +%s) ) / 86400 )) -ge 2 ] && "$HOME/bin/notify" "볼트 백업: 2일 이상 성공 없음(메인 D 드라이브). 로그 ~/.local/state/vault-backup/log" 2>/dev/null
+exit 1

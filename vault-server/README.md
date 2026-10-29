@@ -27,8 +27,9 @@
 ## 원본을 고쳤으면
 원본을 고친 뒤 이 폴더로 다시 복사해 커밋한다(`cp` 표 참고). 반대 방향으로 쓰지 않는다.
 
-## 백업 (restic → 메인 PC D:\vault-backup, 10/29 확정)
-- 설정 `~/.config/vault-backup/{env,password,known_hosts}` (git 밖, 600). env 에 MAIN_SSH_HOST·RESTIC_REPOSITORY(sftp)·RESTIC_SFTP_COMMAND(전용 known_hosts 사용). 암호는 대표 비밀번호 관리자에 사본.
-- `~/bin/vault-backup` 를 cron 이 09~18시 매시 호출, 하루 1회 성공. 메인 꺼져 있으면 건너뜀. 2일 미성공 시 notify.
-- 복원: `restic -o "sftp.command=$RESTIC_SFTP_COMMAND" restore latest --target <폴더>` 뒤 `<폴더>/home/ionenet/vault.git` 을 정본 자리로.
-- 메인 호스트 키 지문(ED25519) SHA256:4OxkBL2VakWuRqS3G7bF0CdajTLVzzBSbKwHW/qDBnk — 바뀌면 메인 세션에 확인.
+## 백업 (git bundle → 메인 PC D:ault-backupundles, 10/29 확정·암호 없음)
+- CEO 결정: 백업 비밀번호를 관리하지 않는다 → restic 대신 날짜별 `git bundle`(암호화 없음, 내부 디스크). restic 설정은 `~/.config/vault-backup/restic-unused/` 에 보관만.
+- 설정 `~/.config/vault-backup/host`(한 줄: sinwy@100.125.31.94), `known_hosts`(메인 ED25519 지문 SHA256:4OxkBL2VakWuRqS3G7bF0CdajTLVzzBSbKwHW/qDBnk 고정).
+- `~/bin/vault-backup` 를 cron 이 09~18시 매시 호출, 하루 1회 성공. 메인 꺼져 있으면 건너뜀. 2일 미성공 시 notify. 메인 폴더에 최근 30개 유지.
+- 복원: 묶음 하나를 가져와 `git clone vault-YYYY-MM-DD.bundle 복원폴더` → 그 폴더를 `git clone --bare` 해 `~/vault.git` 자리로. 비밀번호 불필요.
+- 포함: 볼트 git 이력 전체(모든 브랜치). 미포함: 미커밋 초안(vault-note 가 즉시 커밋하므로 보통 없음), 서버 장치(이 저장소에 있음).
